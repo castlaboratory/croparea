@@ -1,0 +1,1527 @@
+---
+title: "Bootstrap Assessment of Crop Area Estimates using Satellite
+Pixels Counting"
+author: "André Leite, Cristiano Ferraz, Jacques Delincé & Raydonal Ospina"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    toc: true
+---
+
+<!-- Para deixar fundo do rpubs.com branco como deveria ser... -->
+<style>
+body { background-color: white; }
+pre, pre:not([class]) { background-color: white; }
+</style>
+<!-- Fim de "Para deixar fundo do rpubs.com branco como deveria ser..." -->
+
+## Packages
+
+
+```{r, message=FALSE, warning=FALSE}
+library(pracma)
+library(tidyverse)
+library(readxl)
+library(glmnet)
+library(knitr)
+library(kableExtra)
+library(plotly)
+library(paletteer)
+```
+
+## Function to generate artifitial population
+
+```{r}
+gen_U_star <- function(a_matrix, size, strategy){
+  stopifnot(strategy %in% c('one', 'two', 'three'))
+  if (strategy == 'one') {
+    U_star <- 
+    expand_grid(
+      c = colnames(a_matrix), 
+      g = rownames(a_matrix)) %>% 
+    mutate(n = c(a_matrix), 
+           pi = n/sum(n), 
+           Code = paste0(c, ' - ', g)) %>% 
+    sample_n(size = size, replace = TRUE, weight = pi) %>% 
+    select(g, c, pi)
+  } else if (strategy == 'two') {
+    sample_size_group <- size/nrow(a_matrix)
+    U_star <-
+      a_matrix %>% 
+      as_tibble(rownames = 'g') %>% 
+      pivot_longer(-g, names_to = 'c', values_to = 'n') %>% 
+      group_by(c) %>% 
+      mutate(pi = n/sum(n)) %>% 
+      group_split() %>% 
+      map_dfr( ~ sample_n(.x, size = sample_size_group, replace = TRUE, weight = pi))  %>% 
+      select(g, c, pi)
+  } else if (strategy == 'three') {
+    sample_size_group <- size/ncol(a_matrix)
+    U_star <-
+      a_matrix %>% 
+      as_tibble(rownames = 'g') %>% 
+      pivot_longer(-g, names_to = 'c', values_to = 'n') %>% 
+      group_by(g) %>% 
+      mutate(pi = n/sum(n)) %>% 
+      group_split() %>% 
+      map_dfr( ~ sample_n(.x, size = sample_size_group, replace = TRUE, weight = pi)) %>% 
+      select(g, c, pi)
+  }
+  return(U_star)
+}
+```
+
+
+## Function to get a sample from artifitial population
+
+```{r}
+# get_a_sample <- function(U_star, N_0, strategy, order){
+#   a_sample <- U_star %>% 
+#     sample_n(N_0) %>% 
+#     count(c, g) %>% 
+#     pivot_wider(names_from = 'c', values_from = n, values_fill = 0) %>% 
+#     column_to_rownames(var = 'g') %>% 
+#     as.matrix()  
+#   if (is.null(order)) return(a_sample)
+#   else return(a_sample[order, order])
+# }
+
+### Three strategies function
+
+get_a_sample_3st <- function(U_star, N_0, strategy = 'one', order){
+  stopifnot(strategy %in% c('one', 'two', 'three'))
+  if (strategy == 'one') {
+    a_sample <- U_star %>% 
+      sample_n(N_0) %>% 
+      count(c, g) %>% 
+      pivot_wider(names_from = 'c', values_from = n, values_fill = 0) %>% 
+      arrange(match(g, order)) %>% 
+      select(crop = g, all_of(order)) %>% 
+      column_to_rownames(var = 'crop') %>% 
+      as.matrix() 
+  } else if (strategy == 'two') {
+    sample_size_group <- N_0/nrow(a_0)
+    a_sample <- 
+      U_star %>% 
+      count(g, c) %>% 
+      group_by(c) %>% 
+      select(c, g, n) %>% 
+      mutate(pi = n/sum(n)) %>% 
+      group_split() %>% 
+      map_dfr( ~ sample_n(.x, size = sample_size_group, replace = TRUE, weight = pi)) %>% 
+      count(g, c) %>% 
+      pivot_wider(names_from = "c", values_from = "n", values_fill = 0) %>% 
+      arrange(match(g, order)) %>% 
+      select(crop = g, all_of(order)) %>% 
+      column_to_rownames(var = 'crop') %>% 
+      as.matrix()
+  } else if (strategy == 'three') {
+    sample_size_group <- N_0/ncol(a_0)
+    a_sample <- 
+      U_star %>% 
+      count(g, c) %>% 
+      group_by(g) %>% 
+      select(g, c, n) %>% 
+      mutate(pi = n/sum(n)) %>% 
+      group_split() %>% 
+      map_dfr( ~ sample_n(.x, size =  sample_size_group, replace = TRUE, weight = pi)) %>% 
+      count(g, c) %>% 
+      pivot_wider(names_from = "c", values_from = "n", values_fill = 0) %>% 
+      arrange(match(g, order)) %>% 
+      select(crop = g, all_of(order)) %>% 
+      column_to_rownames(var = 'crop') %>% 
+      as.matrix()
+  }
+  return(a_sample)
+}
+
+```
+
+## Function to get estimates from sample confution matrix from artifitial population
+
+```{r}
+get_estimates <- function(a_matrix, R_U_0){
+  e_g_dado_c <- a_matrix %*% solve(diag(colSums(a_matrix)))
+  e_c_dado_g <- t(a_matrix) %*% solve(diag(rowSums(a_matrix)))
+  inverse_e_c_dado_g <- solve(e_c_dado_g)
+  rownames(inverse_e_c_dado_g) <- rownames(e_c_dado_g)
+  
+  direct <- (e_g_dado_c %*% R_U_0) %>% 
+    as_tibble(rownames = 'crop') %>% 
+    mutate(estimator = 'direct')
+  
+  inverse <- (inverse_e_c_dado_g %*% R_U_0) %>%
+    as_tibble(rownames = 'crop') %>% 
+    mutate(estimator = 'inverse') 
+  
+  return(bind_rows(direct, inverse))
+}
+```
+
+## Function to get bootstrap replicas
+
+```{r}
+get_bootstrap <- function(B, U_star, N_0, R_U_0, strategy, order) {
+  1:B %>% 
+    map(~ get_a_sample_3st(U_star, N_0, strategy, order)) %>% 
+    map_dfr(~ get_estimates(.x, R_U_0)) %>% 
+    mutate(replica = ceiling(row_number()/6))
+}
+```
+
+
+## Jacques' Matrix
+
+```{r}
+jacques_tibble <- read_excel("data/Simdata.xlsx", 
+                      sheet = "Sheet1", 
+                      range = "B3:G8",
+                      .name_repair = ~ if_else(.x == '', 'crop', .x))
+
+
+jacques_matrix <- jacques_tibble %>% 
+  column_to_rownames(var = "crop") %>% 
+  as.matrix() 
+```
+
+```{r}
+jacques_matrix %>% 
+  as.data.frame() %>% 
+  rownames_to_column(var = "crop") %>% 
+  kable(caption = "Jacques' matrix") %>% 
+  kable_styling(bootstrap_options = 
+                  c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE)
+```
+### $T$ and $V$ vectors
+
+```{r}
+
+Size <- 1e6
+R_vector <- jacques_matrix %>% 
+  { matrix(colSums(.), ncol = 1, dimnames = list(colnames(.), 'value')) * Size } %>%
+  t() 
+T_vector <- jacques_matrix %>% 
+  { matrix(rowSums(.), ncol = 1, dimnames = list(colnames(.), 'value')) * Size } 
+
+  
+```
+
+
+
+### Get a artifitial population and associate R vector
+
+```{r}
+# Population Size
+Size = 1000000
+# Seed
+set.seed(112358)
+
+U_0 <- gen_U_star(jacques_matrix, strategy = 'one', size = Size)
+R_U_0 <- U_0 %>% 
+  count(c) %>% 
+  arrange(match(c, colnames(jacques_matrix))) %>% 
+  column_to_rownames(var = 'c') %>% 
+  as.matrix() 
+
+T_U_0 <- U_0 %>% 
+  count(g) %>% 
+  arrange(match(g, colnames(jacques_matrix))) %>% 
+  column_to_rownames(var = 'g') %>% 
+  as.matrix() 
+
+Reference <- 
+  bind_rows(
+    T_U_0 %>% as_tibble(rownames = "crop") %>% mutate(References = "T"),
+    R_U_0 %>% as_tibble(rownames = "crop") %>% mutate(References = "R")
+  ) %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE))
+
+# a_0 <- U_0 %>% 
+#   sample_n(N_0) %>% 
+#   count(g, c) %>%   
+#   pivot_wider(names_from = "c", values_from = "n",values_fill = 0) %>% 
+#   arrange(match(g, colnames(jacques_matrix))) %>% 
+#   select(crop = g, all_of(colnames(jacques_matrix))) %>% 
+#   column_to_rownames(var = 'crop') %>% 
+#   as.matrix() 
+
+```
+
+
+### T_0 and R_0 tables
+
+```{r}
+T_U_0 %>% 
+  kable(caption = "T_0 vector") %>% 
+  kable_styling(bootstrap_options = 
+                  c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, font_size = 12) 
+```
+
+```{r}
+R_U_0 %>% 
+  kable(caption = "R_0 vector") %>% 
+  kable_styling(bootstrap_options = 
+                  c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, font_size = 12) 
+```
+
+## Strategy 1
+
+### a_0, r_0, t_0
+
+```{r}
+
+## Sample
+N_0 <- 1000
+a_0 <- get_a_sample_3st(U_star = U_0, N_0 = 1000, order = colnames(jacques_matrix), strategy = "one")
+
+r_vector <- a_0 %>% 
+  { matrix(colSums(.), ncol = 1, dimnames = list(colnames(.), 'value'))} %>%
+  t() 
+t_vector <- a_0 %>% 
+  { matrix(rowSums(.), ncol = 1, dimnames = list(colnames(.), 'value'))} 
+
+a_0 %>% as_tibble(rownames = 'crop') %>% 
+  bind_rows(as_tibble(r_vector) %>% mutate(crop = 'R')) %>% 
+  bind_cols(as_tibble(t_vector) %>% rename(T = value) %>% 
+              bind_rows(tibble(`T` = 1000))) %>% 
+  kable(caption = "a_0 confusion sample matrix") %>% 
+  kable_styling(bootstrap_options = 
+                  c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, font_size = 12) %>% 
+  column_spec(c(1,7), bold = TRUE) %>% 
+  row_spec(6, bold = TRUE)
+```
+
+
+### Get a artifitial population for bootstrap sampling
+
+```{r}
+U_star <- gen_U_star(a_0, strategy = 'one', size = Size)
+```
+
+### Generate 1000 bootstrap replicas
+
+```{r}
+#set.seed(112358)
+result_one <- get_bootstrap(1000, U_star, N_0, R_U_0, strategy = 'one', order = colnames(jacques_matrix)) %>% 
+  mutate(Sample = '1000')
+write_rds(result_one, "data/result_one_N1m.rds")
+```
+
+
+### Plot result
+
+```{r}
+Palette <- palettes_d_names %>%
+  filter(length == 3) %>%
+  mutate(code = paste0(package, "::", palette)) %>%
+  pull(code) %>%
+  .[7] #3 5
+
+
+result_one %>% 
+  filter(Sample == "1000") %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ crop, scales = 'free', ncol = 2) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = 1, data = Reference) + 
+  scale_color_paletteer_d(Palette)
+
+result_one %>% 
+  filter(Sample == "1000") %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ crop, scales = 'free', ncol = 2) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference) 
+```
+
+
+### Bootstrap summary
+
+```{r}
+table <- result_one %>% group_by(crop, estimator, Sample) %>% 
+    summarise(Mean = mean(n), 
+              Variance = var(n), 
+              `Standard Deviation` = sd(n), 
+              CV = `Standard Deviation`/Mean, 
+              .groups = 'drop') %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  left_join(Reference %>% pivot_wider(names_from = References,  values_from = "n"), by = "crop") %>% 
+  mutate(`T Bias` = `T` - Mean,
+         `R Bias` = `R` - Mean) %>% 
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Mean = format(round(Mean), nsmall = 0, big.mark = ","),
+         Variance = format(round(Variance), nsmall = 0, big.mark = ","),
+         `Standard Deviation` = format(round(`Standard Deviation`), nsmall = 0, big.mark = ","),
+         CV = format(round(CV, 4), nsmall = 2, big.mark = ","), 
+         `T` = format(round(`T`), nsmall = 0, big.mark = ","),
+         `T Bias` = format(round(`T Bias`), nsmall = 0, big.mark = ","),
+         `R` = format(round(`R`), nsmall = 0, big.mark = ","),
+         `R Bias` = format(round(`R Bias`), nsmall = 0, big.mark = ","))
+table %>% 
+  kable(caption = "Direct and Inverse Estimators Bootstrap Results (1000 rounds)", align = "lcrrrr") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  column_spec(10, color = if_else(str_detect(table$`T Bias`, "-"), 'red', 'black')) %>%  
+  column_spec(11, color = if_else(str_detect(table$`R Bias`, "-"), 'red', 'black')) 
+```
+
+
+### Other plots
+
+#### Crop: Wheat
+```{r}
+result_one %>% filter(crop == 'Wheat', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Wheat") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Wheat')) + 
+  scale_color_paletteer_d(Palette)
+
+
+result_one %>% 
+  filter(crop == 'Wheat', Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Wheat") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Wheat')) 
+```
+
+#### Crop: Rapeseed
+
+```{r}
+result_one %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Rapeseed") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Rapeseed')) + 
+  scale_color_paletteer_d(Palette)
+
+
+result_one %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Rapeseed") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Rapeseed')) 
+
+```
+
+#### Crop: Corn
+
+```{r}
+result_one %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Corn") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Corn')) + 
+  scale_color_paletteer_d(Palette)
+
+result_one %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  #ggtitle("Crop: Corn") +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Corn')) 
+```
+
+#### Crop: Sugarbeet
+
+```{r}
+result_one %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Sugarbeet") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Sugarbeet')) + 
+  scale_color_paletteer_d(Palette)
+
+result_one %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Sugarbeet") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Sugarbeet')) 
+```
+
+#### Crop: Others
+
+```{r}
+result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Others") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Others')) + 
+  scale_color_paletteer_d(Palette)
+
+result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Others") +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Others')) 
+```
+
+
+<!-- #### Crop: Wheat -->
+
+<!-- ```{r} -->
+<!-- result_one %>% filter(crop == 'Wheat', Sample == '1000') %>% ggplot() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     #ggtitle("Crop: Wheat") + -->
+<!--     geom_vline(aes(xintercept = n/1000, color = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Wheat')) +  -->
+<!--     scale_color_paletteer_d(Palette) -->
+
+<!-- result_one %>% filter(crop == 'Wheat', Sample == '1000') %>% ggplot() + -->
+<!--   theme_bw() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     #ggtitle("Crop: Wheat") + -->
+<!--     scale_fill_brewer(palette = "Greys", direction = -1) + -->
+<!--     geom_vline(aes(xintercept = n/1000, linetype = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Wheat'))  -->
+<!-- ``` -->
+
+<!-- #### Crop: Rapeseed -->
+
+<!-- ```{r} -->
+<!-- result_one %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     #ggtitle("Crop: Rapeseed") + -->
+<!--     geom_vline(aes(xintercept = n/1000, color = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Rapeseed')) +  -->
+<!--     scale_color_paletteer_d(Palette) -->
+
+
+<!-- result_one %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() + -->
+<!--     theme_bw() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     #ggtitle("Crop: Rapeseed") + -->
+<!--     scale_fill_brewer(palette = "Greys", direction = -1) + -->
+<!--     geom_vline(aes(xintercept = n/1000, linetype = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Rapeseed')) -->
+<!-- ``` -->
+
+<!-- #### Crop: Corn -->
+
+<!-- ```{r} -->
+<!-- result_one %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     #ggtitle("Crop: Corn") + -->
+<!--     geom_vline(aes(xintercept = n/1000, color = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Corn')) +  -->
+<!--     scale_color_paletteer_d(Palette) -->
+
+<!-- result_one %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() + -->
+<!--     theme_bw() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_brewer(palette = "Greys", direction = -1) + -->
+<!--     #ggtitle("Crop: Corn") + -->
+<!--     geom_vline(aes(xintercept = n/1000, linetype = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Corn'))  -->
+<!-- ``` -->
+
+<!-- #### Crop: Sugarbeet -->
+
+<!-- ```{r} -->
+<!-- result_one %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     #ggtitle("Crop: Sugarbeet") + -->
+<!--     geom_vline(aes(xintercept = n/1000, color = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Sugarbeet')) +  -->
+<!--     scale_color_paletteer_d(Palette) -->
+
+<!-- result_one %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() + -->
+<!--     theme_bw() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_brewer(palette = "Greys", direction = -1) + -->
+<!--     #ggtitle("Crop: Sugarbeet") + -->
+<!--     geom_vline(aes(xintercept = n/1000, linetype = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Sugarbeet'))  -->
+<!-- ``` -->
+
+<!-- #### Crop: Others -->
+
+<!-- ```{r} -->
+<!-- result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     #ggtitle("Crop: Others") + -->
+<!--     geom_vline(aes(xintercept = n/1000, color = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Others')) +  -->
+<!--     scale_color_paletteer_d(Palette) -->
+
+<!-- result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() + -->
+<!--     theme_bw() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, y=stat(density)), color = 'gray',  -->
+<!--                    alpha = .75,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') +  -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Reference') + -->
+<!--     scale_fill_brewer(palette = "Greys", direction = -1) + -->
+<!--     #ggtitle("Crop: Others") + -->
+<!--     geom_vline(aes(xintercept = n/1000, linetype = References),  -->
+<!--                size = 1, data = Reference %>% filter(crop == 'Others'))  -->
+<!-- ``` -->
+
+
+<!-- ```{r} -->
+<!-- result_one %>%  -->
+<!--     filter(Sample == '1000') %>%  -->
+<!--     ggplot() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator,y=stat(density)),  -->
+<!--                    alpha = .5,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') + -->
+<!--     geom_density(aes(x = n/1000, color = estimator), size = .75, position = 'identity') +  -->
+<!--     facet_wrap(~ crop, scales = 'free') + -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Estimator') + -->
+<!--     scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     scale_color_paletteer_d(`"ggthemes::wsj_red_green"`) +  -->
+<!--     geom_vline(aes(xintercept = n/1000, linetype = References),  -->
+<!--                size = 1, data = Reference) -->
+
+<!-- result_one %>%  -->
+<!--     filter(Sample == '1000') %>%  -->
+<!--     ggplot() + -->
+<!--     theme_bw() + -->
+<!--     geom_histogram(aes(x = n/1000, fill = estimator, color = estimator, y=stat(density)),  -->
+<!--                    alpha = .5,  -->
+<!--                    bins = 30,  -->
+<!--                    position = 'identity') + -->
+<!--     geom_density(aes(x = n/1000, color = estimator), size = .75, position = 'identity') +  -->
+<!--     facet_wrap(~ crop, scales = 'free') + -->
+<!--     theme(legend.position="bottom") +  -->
+<!--     labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator', color = 'Estimator') + -->
+<!--     scale_fill_brewer(palette = "Greys", direction = -1) + -->
+<!--     scale_color_brewer(palette = "Greys", direction = -1) + -->
+<!--     geom_vline(aes(xintercept = n/1000, linetype = References),  -->
+<!--                size = 1, data = Reference)  -->
+
+<!-- ``` -->
+
+
+
+## Strategy 2
+
+### a_0, r_0, t_0
+
+```{r}
+
+## Sample
+N_0 <- 1000
+a_0 <- get_a_sample_3st(U_star = U_0, N_0 = 1000, order = colnames(jacques_matrix), strategy = "two")
+
+r_vector <- a_0 %>% 
+  { matrix(colSums(.), ncol = 1, dimnames = list(colnames(.), 'value'))} %>%
+  t() 
+t_vector <- a_0 %>% 
+  { matrix(rowSums(.), ncol = 1, dimnames = list(colnames(.), 'value'))} 
+
+a_0 %>% as_tibble(rownames = 'crop') %>% 
+  bind_rows(as_tibble(r_vector) %>% mutate(crop = 'R')) %>% 
+  bind_cols(as_tibble(t_vector) %>% rename(T = value) %>% 
+              bind_rows(tibble(`T` = 1000))) %>% 
+  kable(caption = "a_0 confusion sample matrix") %>% 
+  kable_styling(bootstrap_options = 
+                  c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, font_size = 12) %>% 
+  column_spec(c(1,7), bold = TRUE) %>% 
+  row_spec(6, bold = TRUE)
+```
+
+
+### Get a artifitial population for bootstrap sampling
+
+```{r}
+U_star <- gen_U_star(a_0, strategy = 'two', size = Size)
+```
+
+### Generate 1000 bootstrap replicas
+
+```{r}
+#set.seed(112358)
+result_two <- get_bootstrap(1000, U_star, N_0, R_U_0, strategy = 'two', order = colnames(jacques_matrix)) %>% 
+  mutate(Sample = '1000')
+write_rds(result_two, "data/result_two_N1m.rds")
+
+
+```
+
+
+### Plot result
+
+```{r}
+Palette <- palettes_d_names %>%
+  filter(length == 3) %>%
+  mutate(code = paste0(package, "::", palette)) %>%
+  pull(code) %>%
+  .[7] #3 5
+
+
+result_two %>% 
+  filter(Sample == "1000") %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ crop, scales = 'free', ncol = 2) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = 1, data = Reference) + 
+  scale_color_paletteer_d(Palette)
+
+result_two %>% 
+  filter(Sample == "1000") %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ crop, scales = 'free', ncol = 2) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference) 
+```
+
+
+### Bootstrap summary
+
+```{r}
+table <- result_two %>% group_by(crop, estimator, Sample) %>% 
+    summarise(Mean = mean(n), 
+              Variance = var(n), 
+              `Standard Deviation` = sd(n), 
+              CV = `Standard Deviation`/Mean, 
+              .groups = 'drop') %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  left_join(Reference %>% pivot_wider(names_from = References,  values_from = "n"), by = "crop") %>% 
+  mutate(`T Bias` = `T` - Mean,
+         `R Bias` = `R` - Mean) %>% 
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Mean = format(round(Mean), nsmall = 0, big.mark = ","),
+         Variance = format(round(Variance), nsmall = 0, big.mark = ","),
+         `Standard Deviation` = format(round(`Standard Deviation`), nsmall = 0, big.mark = ","),
+         CV = format(round(CV, 4), nsmall = 2, big.mark = ","), 
+         `T` = format(round(`T`), nsmall = 0, big.mark = ","),
+         `T Bias` = format(round(`T Bias`), nsmall = 0, big.mark = ","),
+         `R` = format(round(`R`), nsmall = 0, big.mark = ","),
+         `R Bias` = format(round(`R Bias`), nsmall = 0, big.mark = ","))
+table %>% 
+  kable(caption = "Direct and Inverse Estimators Bootstrap Results (1000 rounds)", align = "lcrrrr") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  column_spec(4, color = if_else(str_detect(table$Mean, "-"), 'red', 'black')) %>%  
+  column_spec(7, color = if_else(str_detect(table$CV, "-"), 'red', 'black')) %>%  
+  column_spec(10, color = if_else(str_detect(table$`T Bias`, "-"), 'red', 'black')) %>%  
+  column_spec(11, color = if_else(str_detect(table$`R Bias`, "-"), 'red', 'black')) 
+```
+
+
+### Other plots
+
+#### Crop: Wheat
+```{r}
+result_two %>% filter(crop == 'Wheat', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Wheat") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Wheat')) + 
+  scale_color_paletteer_d(Palette)
+
+
+result_two %>% 
+  filter(crop == 'Wheat', Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Wheat") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Wheat')) 
+```
+
+#### Crop: Rapeseed
+
+```{r}
+result_two %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Rapeseed") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Rapeseed')) + 
+  scale_color_paletteer_d(Palette)
+
+
+result_two %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Rapeseed") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Rapeseed')) 
+
+```
+
+#### Crop: Corn
+
+```{r}
+result_two %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Corn") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Corn')) + 
+  scale_color_paletteer_d(Palette)
+
+result_two %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  #ggtitle("Crop: Corn") +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Corn')) 
+```
+
+#### Crop: Sugarbeet
+
+```{r}
+result_two %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Sugarbeet") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Sugarbeet')) + 
+  scale_color_paletteer_d(Palette)
+
+result_two %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Sugarbeet") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Sugarbeet')) 
+```
+
+#### Crop: Others
+
+```{r}
+result_two %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Others") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Others')) + 
+  scale_color_paletteer_d(Palette)
+
+result_two %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  #ggtitle("Crop: Others") +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Others')) 
+```
+
+
+
+## Strategy 3
+
+### a_0, r_0, t_0
+
+```{r}
+
+## Sample
+N_0 <- 1000
+a_0 <- get_a_sample_3st(U_star = U_0, N_0 = 1000, order = colnames(jacques_matrix), strategy = "three")
+
+r_vector <- a_0 %>% 
+  { matrix(colSums(.), ncol = 1, dimnames = list(colnames(.), 'value'))} %>%
+  t() 
+t_vector <- a_0 %>% 
+  { matrix(rowSums(.), ncol = 1, dimnames = list(colnames(.), 'value'))} 
+
+a_0 %>% as_tibble(rownames = 'crop') %>% 
+  bind_rows(as_tibble(r_vector) %>% mutate(crop = 'R')) %>% 
+  bind_cols(as_tibble(t_vector) %>% rename(T = value) %>% 
+              bind_rows(tibble(`T` = 1000))) %>% 
+  kable(caption = "a_0 confusion sample matrix") %>% 
+  kable_styling(bootstrap_options = 
+                  c("striped", "hover", "condensed", "responsive"), 
+                full_width = FALSE, font_size = 12) %>% 
+  column_spec(c(1,7), bold = TRUE) %>% 
+  row_spec(6, bold = TRUE)
+```
+
+
+### Get a artifitial population for bootstrap sampling
+
+```{r}
+U_star <- gen_U_star(a_0, strategy = 'three', size = Size)
+```
+
+### Generate 1000 bootstrap replicas
+
+```{r}
+#set.seed(112358)
+result_three <- get_bootstrap(1000, U_star, N_0, R_U_0, strategy = 'three', order = colnames(jacques_matrix)) %>% 
+  mutate(Sample = '1000')
+write_rds(result_three, "data/result_three_N1m.rds")
+
+```
+
+
+### Plot result
+
+```{r}
+Palette <- palettes_d_names %>%
+  filter(length == 3) %>%
+  mutate(code = paste0(package, "::", palette)) %>%
+  pull(code) %>%
+  .[7] #3 5
+
+
+result_three %>% 
+  filter(Sample == "1000") %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ crop, scales = 'free', ncol = 2) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = 1, data = Reference) + 
+  scale_color_paletteer_d(Palette)
+
+result_three %>% 
+  filter(Sample == "1000") %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ crop, scales = 'free', ncol = 2) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference) 
+```
+
+
+### Bootstrap summary
+
+```{r}
+table <- result_three %>% group_by(crop, estimator, Sample) %>% 
+    summarise(Mean = mean(n), 
+              Variance = var(n), 
+              `Standard Deviation` = sd(n), 
+              CV = `Standard Deviation`/Mean, 
+              .groups = 'drop') %>% 
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  left_join(Reference %>% pivot_wider(names_from = References,  values_from = "n"), by = "crop") %>% 
+  mutate(`T Bias` = `T` - Mean,
+         `R Bias` = `R` - Mean) %>% 
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Mean = format(round(Mean), nsmall = 0, big.mark = ","),
+         Variance = format(round(Variance), nsmall = 0, big.mark = ","),
+         `Standard Deviation` = format(round(`Standard Deviation`), nsmall = 0, big.mark = ","),
+         CV = format(round(CV, 4), nsmall = 2, big.mark = ","), 
+         `T` = format(round(`T`), nsmall = 0, big.mark = ","),
+         `T Bias` = format(round(`T Bias`), nsmall = 0, big.mark = ","),
+         `R` = format(round(`R`), nsmall = 0, big.mark = ","),
+         `R Bias` = format(round(`R Bias`), nsmall = 0, big.mark = ","))
+table %>% 
+  kable(caption = "Direct and Inverse Estimators Bootstrap Results (1000 rounds)", align = "lcrrrr") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+                full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  column_spec(5, color = if_else(str_detect(table$Mean, "-"), 'red', 'black')) %>%  
+  column_spec(7, color = if_else(str_detect(table$CV, "-"), 'red', 'black')) %>%  
+  column_spec(10, color = if_else(str_detect(table$`T Bias`, "-"), 'red', 'black')) %>%  
+  column_spec(11, color = if_else(str_detect(table$`R Bias`, "-"), 'red', 'black')) 
+```
+
+
+### Other plots
+
+#### Crop: Wheat
+```{r}
+result_three %>% filter(crop == 'Wheat', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Wheat") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Wheat')) + 
+  scale_color_paletteer_d(Palette)
+
+
+result_three %>% 
+  filter(crop == 'Wheat', Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Wheat") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Wheat')) 
+```
+
+#### Crop: Rapeseed
+
+```{r}
+result_three %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Rapeseed") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Rapeseed')) + 
+  scale_color_paletteer_d(Palette)
+
+
+result_three %>% filter(crop == 'Rapeseed', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Rapeseed") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Rapeseed')) 
+
+```
+
+#### Crop: Corn
+
+```{r}
+result_three %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Corn") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Corn')) + 
+  scale_color_paletteer_d(Palette)
+
+result_three %>% filter(crop == 'Corn', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  #ggtitle("Crop: Corn") +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Corn')) 
+```
+
+#### Crop: Sugarbeet
+
+```{r}
+result_three %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Sugarbeet") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Sugarbeet')) + 
+  scale_color_paletteer_d(Palette)
+
+result_three %>% filter(crop == 'Sugarbeet', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  #ggtitle("Crop: Sugarbeet") +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Sugarbeet')) 
+```
+
+#### Crop: Others
+
+```{r}
+result_three %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #ggtitle("Crop: Others") +
+  geom_vline(aes(xintercept = n/1000, color = References), 
+             size = 1, data = Reference %>% filter(crop == 'Others')) + 
+  scale_color_paletteer_d(Palette)
+
+result_three %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  theme(legend.position="bottom") + 
+  labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
+  #ggtitle("Crop: Others") +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), 
+             size = 1, data = Reference %>% filter(crop == 'Others')) 
+```
+
+## Comparing Strategies
+
+#### Crop: `r colnames(jacques_matrix)[1]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[1]
+
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = .75, data = Reference %>% filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette) 
+  
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = .75, data = Reference %>% filter(crop == Crop)) 
+```
+
+
+#### Crop: `r colnames(jacques_matrix)[2]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[2]
+
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = .75, data = Reference %>% filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette) 
+  
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = .75, data = Reference %>% filter(crop == Crop)) 
+```
+
+#### Crop: `r colnames(jacques_matrix)[3]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[3]
+
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = .75, data = Reference %>% filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette) 
+  
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = .75, data = Reference %>% filter(crop == Crop)) 
+```
+
+#### Crop: `r colnames(jacques_matrix)[4]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[4]
+
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = .75, data = Reference %>% filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette) 
+  
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = .75, data = Reference %>% filter(crop == Crop)) 
+```
+
+#### Crop: `r colnames(jacques_matrix)[5]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[5]
+
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  geom_vline(aes(xintercept = n/1000, color = References), size = .75, data = Reference %>% filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette) 
+  
+result_one %>% 
+  mutate(Strategy = "Strategy 1") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  filter(crop == Crop) %>% 
+  filter(Sample == '1000') %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_wrap(~ Strategy, scales = "free_y", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = .75, data = Reference %>% filter(crop == Crop)) 
+```
+
+## Previous results on sample size impact
+
+```{r}
+result <- read_rds("data/result1k10k100k.rds")
+```
+
+
+#### Crop: `r colnames(jacques_matrix)[1]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[1]
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +
+  geom_vline(aes(xintercept = n/1000, color = References, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette)
+
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop))
+```
+
+
+#### Crop: `r colnames(jacques_matrix)[2]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[2]
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +
+  geom_vline(aes(xintercept = n/1000, color = References, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette)
+
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop))
+```
+
+#### Crop: `r colnames(jacques_matrix)[3]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[3]
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +
+  geom_vline(aes(xintercept = n/1000, color = References, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette)
+
+Crop =  colnames(jacques_matrix)[3]
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop))
+```
+
+#### Crop: `r colnames(jacques_matrix)[4]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[4]
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +
+  geom_vline(aes(xintercept = n/1000, color = References, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette)
+
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop))
+```
+
+
+#### Crop: `r colnames(jacques_matrix)[5]`
+
+```{r}
+Crop =  colnames(jacques_matrix)[5]
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) +
+  geom_vline(aes(xintercept = n/1000, color = References, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop)) +
+  scale_color_paletteer_d(Palette)
+
+result %>%
+  filter(crop == Crop) %>%
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') +
+  facet_wrap(~ Sample, scales = "fixed", ncol = 1) +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density',
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference %>%
+               filter(crop == Crop))
+```
+
+# Stay Tuned
+
+Please visit the [CastLAB](https://castlab.org)  page for latest updates and news. Comments, bug reports and pull requests are always welcome.
