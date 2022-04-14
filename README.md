@@ -4,13 +4,6 @@ Counting
 André Leite, Cristiano Ferraz, Jacques Delincé & Raydonal Ospina
 2022-04-13
 
-<!-- Para deixar fundo do rpubs.com branco como deveria ser... -->
-<style>
-body { background-color: white; }
-pre, pre:not([class]) { background-color: white; }
-</style>
-<!-- Fim de "Para deixar fundo do rpubs.com branco como deveria ser..." -->
-
 ## Packages
 
 ``` r
