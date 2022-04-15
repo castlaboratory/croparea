@@ -3572,14 +3572,14 @@ result %>% filter(Strategy == "Strategy 1: Bivariate") %>%
   summarise(Estimate = mean(n/1000),
             `Std.Dev.` = sd(n/1000),
             `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
-  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+  left_join(T_U_0 %>% as_tibble(rownames = "crop") %>% rename(T = n),
             by = 'crop') %>% 
-  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Bias = Estimate - T/1000) %>% 
   mutate(Estimate = round(Estimate, 1),
          `Std.Dev.` = round(`Std.Dev.`, 2),
          `CV(%)` = round(`CV(%)`, 1),
          Bias = round(Bias, 1)) %>% 
-  select(-Strategy, -R) %>% 
+  select(-Strategy, -T) %>% 
   arrange(match(crop, colnames(jacques_matrix))) %>%
   rename(Crop = crop, Estimator = estimator) %>% 
   mutate(Estimator = recode(Estimator, 
@@ -3637,7 +3637,7 @@ Direct
 4.3
 </td>
 <td style="text-align:right;">
--73.0
+-6.5
 </td>
 </tr>
 <tr>
@@ -3657,7 +3657,7 @@ Inverse
 10.3
 </td>
 <td style="text-align:right;">
--90.5
+-24.0
 </td>
 </tr>
 <tr>
@@ -3677,7 +3677,7 @@ Direct
 12.2
 </td>
 <td style="text-align:right;">
--47.2
+-2.4
 </td>
 </tr>
 <tr>
@@ -3697,7 +3697,7 @@ Inverse
 78.7
 </td>
 <td style="text-align:right;">
--75.0
+-30.2
 </td>
 </tr>
 <tr>
@@ -3717,7 +3717,7 @@ Direct
 6.8
 </td>
 <td style="text-align:right;">
--29.3
+6.0
 </td>
 </tr>
 <tr>
@@ -3737,7 +3737,7 @@ Inverse
 11.7
 </td>
 <td style="text-align:right;">
--28.7
+6.6
 </td>
 </tr>
 <tr>
@@ -3757,7 +3757,7 @@ Direct
 4.8
 </td>
 <td style="text-align:right;">
-37.9
+-2.1
 </td>
 </tr>
 <tr>
@@ -3777,7 +3777,7 @@ Inverse
 9.0
 </td>
 <td style="text-align:right;">
-37.7
+-2.4
 </td>
 </tr>
 <tr>
@@ -3797,7 +3797,7 @@ Direct
 3.2
 </td>
 <td style="text-align:right;">
-111.6
+5.1
 </td>
 </tr>
 <tr>
@@ -3817,7 +3817,7 @@ Inverse
 6.2
 </td>
 <td style="text-align:right;">
-156.5
+50.0
 </td>
 </tr>
 </tbody>
@@ -3829,14 +3829,14 @@ result %>% filter(Strategy == "Strategy 2: Classification by RS") %>%
   summarise(Estimate = mean(n/1000),
             `Std.Dev.` = sd(n/1000),
             `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
-  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+  left_join(T_U_0 %>% as_tibble(rownames = "crop") %>% rename(T = n),
             by = 'crop') %>% 
-  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Bias = Estimate - T/1000) %>% 
   mutate(Estimate = round(Estimate, 1),
          `Std.Dev.` = round(`Std.Dev.`, 2),
          `CV(%)` = round(`CV(%)`, 1),
          Bias = round(Bias, 1)) %>% 
-  select(-Strategy, -R) %>% 
+  select(-Strategy, -T) %>% 
   arrange(match(crop, colnames(jacques_matrix))) %>%
   rename(Crop = crop, Estimator = estimator) %>% 
   mutate(Estimator = recode(Estimator, 
@@ -3894,7 +3894,7 @@ Direct
 4.9
 </td>
 <td style="text-align:right;">
--68.6
+-2.2
 </td>
 </tr>
 <tr>
@@ -3914,7 +3914,7 @@ Inverse
 7.1
 </td>
 <td style="text-align:right;">
-6.7
+73.2
 </td>
 </tr>
 <tr>
@@ -3934,7 +3934,7 @@ Direct
 14.0
 </td>
 <td style="text-align:right;">
--52.0
+-7.1
 </td>
 </tr>
 <tr>
@@ -3954,7 +3954,7 @@ Inverse
 -16.5
 </td>
 <td style="text-align:right;">
--221.4
+-176.5
 </td>
 </tr>
 <tr>
@@ -3974,7 +3974,7 @@ Direct
 6.2
 </td>
 <td style="text-align:right;">
--30.4
+4.9
 </td>
 </tr>
 <tr>
@@ -3994,7 +3994,7 @@ Inverse
 13.8
 </td>
 <td style="text-align:right;">
--58.0
+-22.7
 </td>
 </tr>
 <tr>
@@ -4014,7 +4014,7 @@ Direct
 4.6
 </td>
 <td style="text-align:right;">
-50.4
+10.3
 </td>
 </tr>
 <tr>
@@ -4034,7 +4034,7 @@ Inverse
 9.7
 </td>
 <td style="text-align:right;">
--1.4
+-41.5
 </td>
 </tr>
 <tr>
@@ -4054,7 +4054,7 @@ Direct
 3.6
 </td>
 <td style="text-align:right;">
-100.6
+-6.0
 </td>
 </tr>
 <tr>
@@ -4074,7 +4074,7 @@ Inverse
 5.3
 </td>
 <td style="text-align:right;">
-274.1
+167.5
 </td>
 </tr>
 </tbody>
@@ -4086,14 +4086,14 @@ result %>% filter(Strategy == "Strategy 3: Classification by Ground") %>%
   summarise(Estimate = mean(n/1000),
             `Std.Dev.` = sd(n/1000),
             `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
-  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+  left_join(T_U_0 %>% as_tibble(rownames = "crop") %>% rename(T = n),
             by = 'crop') %>% 
-  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Bias = Estimate - T/1000) %>% 
   mutate(Estimate = round(Estimate, 1),
          `Std.Dev.` = round(`Std.Dev.`, 2),
          `CV(%)` = round(`CV(%)`, 1),
          Bias = round(Bias, 1)) %>% 
-  select(-Strategy, -R) %>% 
+  select(-Strategy, -T) %>% 
   arrange(match(crop, colnames(jacques_matrix))) %>%
   rename(Crop = crop, Estimator = estimator) %>% 
   mutate(Estimator = recode(Estimator, 
@@ -4151,7 +4151,7 @@ Direct
 3.0
 </td>
 <td style="text-align:right;">
--86.5
+-20.0
 </td>
 </tr>
 <tr>
@@ -4171,7 +4171,7 @@ Inverse
 13.2
 </td>
 <td style="text-align:right;">
--97.0
+-30.6
 </td>
 </tr>
 <tr>
@@ -4191,7 +4191,7 @@ Direct
 4.5
 </td>
 <td style="text-align:right;">
-67.9
+112.7
 </td>
 </tr>
 <tr>
@@ -4211,7 +4211,7 @@ Inverse
 63.6
 </td>
 <td style="text-align:right;">
--65.9
+-21.1
 </td>
 </tr>
 <tr>
@@ -4231,7 +4231,7 @@ Direct
 3.6
 </td>
 <td style="text-align:right;">
-12.0
+47.3
 </td>
 </tr>
 <tr>
@@ -4251,7 +4251,7 @@ Inverse
 11.0
 </td>
 <td style="text-align:right;">
--18.4
+16.9
 </td>
 </tr>
 <tr>
@@ -4271,7 +4271,7 @@ Direct
 3.4
 </td>
 <td style="text-align:right;">
-41.9
+1.8
 </td>
 </tr>
 <tr>
@@ -4291,7 +4291,7 @@ Inverse
 10.2
 </td>
 <td style="text-align:right;">
-42.7
+2.6
 </td>
 </tr>
 <tr>
@@ -4311,7 +4311,7 @@ Direct
 2.7
 </td>
 <td style="text-align:right;">
--35.2
+-141.8
 </td>
 </tr>
 <tr>
@@ -4331,7 +4331,7 @@ Inverse
 8.3
 </td>
 <td style="text-align:right;">
-138.6
+32.1
 </td>
 </tr>
 </tbody>

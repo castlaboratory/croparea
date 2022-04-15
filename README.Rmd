@@ -1533,14 +1533,14 @@ result %>% filter(Strategy == "Strategy 1: Bivariate") %>%
   summarise(Estimate = mean(n/1000),
             `Std.Dev.` = sd(n/1000),
             `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
-  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+  left_join(T_U_0 %>% as_tibble(rownames = "crop") %>% rename(T = n),
             by = 'crop') %>% 
-  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Bias = Estimate - T/1000) %>% 
   mutate(Estimate = round(Estimate, 1),
          `Std.Dev.` = round(`Std.Dev.`, 2),
          `CV(%)` = round(`CV(%)`, 1),
          Bias = round(Bias, 1)) %>% 
-  select(-Strategy, -R) %>% 
+  select(-Strategy, -T) %>% 
   arrange(match(crop, colnames(jacques_matrix))) %>%
   rename(Crop = crop, Estimator = estimator) %>% 
   mutate(Estimator = recode(Estimator, 
@@ -1560,14 +1560,14 @@ result %>% filter(Strategy == "Strategy 2: Classification by RS") %>%
   summarise(Estimate = mean(n/1000),
             `Std.Dev.` = sd(n/1000),
             `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
-  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+  left_join(T_U_0 %>% as_tibble(rownames = "crop") %>% rename(T = n),
             by = 'crop') %>% 
-  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Bias = Estimate - T/1000) %>% 
   mutate(Estimate = round(Estimate, 1),
          `Std.Dev.` = round(`Std.Dev.`, 2),
          `CV(%)` = round(`CV(%)`, 1),
          Bias = round(Bias, 1)) %>% 
-  select(-Strategy, -R) %>% 
+  select(-Strategy, -T) %>% 
   arrange(match(crop, colnames(jacques_matrix))) %>%
   rename(Crop = crop, Estimator = estimator) %>% 
   mutate(Estimator = recode(Estimator, 
@@ -1588,14 +1588,14 @@ result %>% filter(Strategy == "Strategy 3: Classification by Ground") %>%
   summarise(Estimate = mean(n/1000),
             `Std.Dev.` = sd(n/1000),
             `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
-  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+  left_join(T_U_0 %>% as_tibble(rownames = "crop") %>% rename(T = n),
             by = 'crop') %>% 
-  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Bias = Estimate - T/1000) %>% 
   mutate(Estimate = round(Estimate, 1),
          `Std.Dev.` = round(`Std.Dev.`, 2),
          `CV(%)` = round(`CV(%)`, 1),
          Bias = round(Bias, 1)) %>% 
-  select(-Strategy, -R) %>% 
+  select(-Strategy, -T) %>% 
   arrange(match(crop, colnames(jacques_matrix))) %>%
   rename(Crop = crop, Estimator = estimator) %>% 
   mutate(Estimator = recode(Estimator, 
@@ -1607,7 +1607,6 @@ kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive
               full_width = FALSE, font_size = 12) %>% 
   column_spec(1, bold = TRUE) %>% 
   row_spec(0, color = "black", background = 'white')
-
 ```
 
 
