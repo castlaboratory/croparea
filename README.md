@@ -1497,7 +1497,7 @@ result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 <!--                size = 1, data = Reference)  -->
 <!-- ``` -->
 
-## Strategy 2: Remote Sensing
+## Strategy 2: Classification by RS
 
 ### a_0, r_0, t_0
 
@@ -2331,7 +2331,7 @@ result_two %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 
 ![](README_files/figure-gfm/unnamed-chunk-31-2.png)<!-- -->
 
-## Strategy 3: Ground
+## Strategy 3: Classification by Ground
 
 ### a_0, r_0, t_0
 
@@ -3174,8 +3174,8 @@ Crop =  colnames(jacques_matrix)[1]
 
 result_one %>% 
   mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3193,8 +3193,8 @@ result_one %>%
 ``` r
 result_one %>% 
   mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3216,8 +3216,8 @@ Crop =  colnames(jacques_matrix)[2]
 
 result_one %>% 
   mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3234,9 +3234,9 @@ result_one %>%
 
 ``` r
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3257,9 +3257,9 @@ result_one %>%
 Crop =  colnames(jacques_matrix)[3]
 
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3276,9 +3276,9 @@ result_one %>%
 
 ``` r
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3299,9 +3299,9 @@ result_one %>%
 Crop =  colnames(jacques_matrix)[4]
 
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3318,9 +3318,9 @@ result_one %>%
 
 ``` r
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3341,9 +3341,9 @@ result_one %>%
 Crop =  colnames(jacques_matrix)[5]
 
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
@@ -3360,9 +3360,9 @@ result_one %>%
 
 ``` r
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
-  bind_rows(result_two %>% mutate(Strategy = "Strategy 2")) %>% 
-  bind_rows(result_three %>% mutate(Strategy = "Strategy 3")) %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
   filter(Sample == '1000') %>% 
   ggplot() +
