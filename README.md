@@ -3585,7 +3585,7 @@ result %>% filter(Strategy == "Strategy 1: Bivariate") %>%
   mutate(Estimator = recode(Estimator, 
                               direct = 'Direct', 
                               inverse = 'Inverse')) %>% 
-  kable(caption = "Stategy 1 (x 1,000 hectares)", align = "lcrrrr") %>%
+  kable(caption = "Strategy 1: Bivariate (x 1,000 hectares)", align = "lcrrrr") %>%
 kable_classic_2() %>% 
 kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
               full_width = FALSE, font_size = 12) %>% 
@@ -3595,7 +3595,7 @@ kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive
 
 <table class=" lightable-classic-2 table table-striped table-hover table-condensed table-responsive" style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto; font-size: 12px; width: auto !important; margin-left: auto; margin-right: auto;">
 <caption style="font-size: initial !important;">
-Stategy 1 (x 1,000 hectares)
+Strategy 1: Bivariate (x 1,000 hectares)
 </caption>
 <thead>
 <tr>
@@ -3842,7 +3842,7 @@ result %>% filter(Strategy == "Strategy 2: Classification by RS") %>%
   mutate(Estimator = recode(Estimator, 
                               direct = 'Direct', 
                               inverse = 'Inverse')) %>% 
-  kable(caption = "Stategy 2 (x 1,000 hectares)", align = "lcrrrr") %>%
+  kable(caption = "Strategy 2: Classification by RS (x 1,000 hectares)", align = "lcrrrr") %>%
 kable_classic_2() %>% 
 kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
               full_width = FALSE, font_size = 12) %>% 
@@ -3852,7 +3852,7 @@ kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive
 
 <table class=" lightable-classic-2 table table-striped table-hover table-condensed table-responsive" style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto; font-size: 12px; width: auto !important; margin-left: auto; margin-right: auto;">
 <caption style="font-size: initial !important;">
-Stategy 2 (x 1,000 hectares)
+Strategy 2: Classification by RS (x 1,000 hectares)
 </caption>
 <thead>
 <tr>
@@ -4099,7 +4099,7 @@ result %>% filter(Strategy == "Strategy 3: Classification by Ground") %>%
   mutate(Estimator = recode(Estimator, 
                               direct = 'Direct', 
                               inverse = 'Inverse')) %>% 
-  kable(caption = "Stategy 3 (x 1,000 hectares)", align = "lcrrrr") %>%
+  kable(caption = "Strategy 3: Classification by Ground (x 1,000 hectares)", align = "lcrrrr") %>%
 kable_classic_2() %>% 
 kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
               full_width = FALSE, font_size = 12) %>% 
@@ -4109,7 +4109,7 @@ kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive
 
 <table class=" lightable-classic-2 table table-striped table-hover table-condensed table-responsive" style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto; font-size: 12px; width: auto !important; margin-left: auto; margin-right: auto;">
 <caption style="font-size: initial !important;">
-Stategy 3 (x 1,000 hectares)
+Strategy 3: Classification by Ground (x 1,000 hectares)
 </caption>
 <thead>
 <tr>
