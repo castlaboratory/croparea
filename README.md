@@ -2,7 +2,7 @@ Bootstrap Assessment of Crop Area Estimates using Satellite Pixels
 Counting
 ================
 André Leite, Cristiano Ferraz, Jacques Delincé & Raydonal Ospina
-2022-04-13
+</br></br>2022-04-15
 
 ## Packages
 
@@ -17,7 +17,7 @@ library(plotly)
 library(paletteer)
 ```
 
-## Function to generate artifitial population
+## Function to generate artificial population
 
 ``` r
 gen_U_star <- function(a_matrix, size, strategy){
@@ -59,7 +59,7 @@ gen_U_star <- function(a_matrix, size, strategy){
 }
 ```
 
-## Function to get a sample from artifitial population
+## Function to get a sample from artificial population
 
 ``` r
 # get_a_sample <- function(U_star, N_0, strategy, order){
@@ -123,7 +123,7 @@ get_a_sample_3st <- function(U_star, N_0, strategy = 'one', order){
 }
 ```
 
-## Function to get estimates from sample confution matrix from artifitial population
+## Function to get estimates from sample confution matrix and artificial population
 
 ``` r
 get_estimates <- function(a_matrix, R_U_0){
@@ -155,7 +155,7 @@ get_bootstrap <- function(B, U_star, N_0, R_U_0, strategy, order) {
 }
 ```
 
-## Jacques’ Matrix
+## Simulated data
 
 ``` r
 jacques_tibble <- read_excel("data/Simdata.xlsx", 
@@ -321,7 +321,7 @@ T_vector <- jacques_matrix %>%
   { matrix(rowSums(.), ncol = 1, dimnames = list(colnames(.), 'value')) * Size } 
 ```
 
-### Get a artifitial population and associate R vector
+### Get a artificial population and associated R vector
 
 ``` r
 # Population Size
@@ -491,7 +491,7 @@ Others
 </tbody>
 </table>
 
-## Strategy 1
+## Strategy 1: Bivariate
 
 ### a_0, r_0, t_0
 
@@ -689,7 +689,7 @@ R
 </tbody>
 </table>
 
-### Get a artifitial population for bootstrap sampling
+### Get a artificial population for bootstrap sampling
 
 ``` r
 U_star <- gen_U_star(a_0, strategy = 'one', size = Size)
@@ -1497,7 +1497,7 @@ result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 <!--                size = 1, data = Reference)  -->
 <!-- ``` -->
 
-## Strategy 2
+## Strategy 2: Remote Sensing
 
 ### a_0, r_0, t_0
 
@@ -1695,7 +1695,7 @@ R
 </tbody>
 </table>
 
-### Get a artifitial population for bootstrap sampling
+### Get a artificial population for bootstrap sampling
 
 ``` r
 U_star <- gen_U_star(a_0, strategy = 'two', size = Size)
@@ -2331,7 +2331,7 @@ result_two %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 
 ![](README_files/figure-gfm/unnamed-chunk-31-2.png)<!-- -->
 
-## Strategy 3
+## Strategy 3: Ground
 
 ### a_0, r_0, t_0
 
@@ -2529,7 +2529,7 @@ R
 </tbody>
 </table>
 
-### Get a artifitial population for bootstrap sampling
+### Get a artificial population for bootstrap sampling
 
 ``` r
 U_star <- gen_U_star(a_0, strategy = 'three', size = Size)

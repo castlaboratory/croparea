@@ -2,7 +2,7 @@
 title: "Bootstrap Assessment of Crop Area Estimates using Satellite
 Pixels Counting"
 author: "André Leite, Cristiano Ferraz, Jacques Delincé & Raydonal Ospina"
-date: "`r Sys.Date()`"
+date: "</br></br>`r Sys.Date()`"
 always_allow_html: true
 output:
   github_document
@@ -22,7 +22,7 @@ library(plotly)
 library(paletteer)
 ```
 
-## Function to generate artifitial population
+## Function to generate artificial population
 
 ```{r}
 gen_U_star <- function(a_matrix, size, strategy){
@@ -65,7 +65,7 @@ gen_U_star <- function(a_matrix, size, strategy){
 ```
 
 
-## Function to get a sample from artifitial population
+## Function to get a sample from artificial population
 
 ```{r}
 # get_a_sample <- function(U_star, N_0, strategy, order){
@@ -130,7 +130,7 @@ get_a_sample_3st <- function(U_star, N_0, strategy = 'one', order){
 
 ```
 
-## Function to get estimates from sample confution matrix from artifitial population
+## Function to get estimates from sample confution matrix and artificial population
 
 ```{r}
 get_estimates <- function(a_matrix, R_U_0){
@@ -163,7 +163,7 @@ get_bootstrap <- function(B, U_star, N_0, R_U_0, strategy, order) {
 ```
 
 
-## Jacques' Matrix
+## Simulated data
 
 ```{r}
 jacques_tibble <- read_excel("data/Simdata.xlsx", 
@@ -203,7 +203,7 @@ T_vector <- jacques_matrix %>%
 
 
 
-### Get a artifitial population and associate R vector
+### Get a artificial population and associated R vector
 
 ```{r}
 # Population Size
@@ -261,7 +261,7 @@ R_U_0 %>%
                 full_width = FALSE, font_size = 12) 
 ```
 
-## Strategy 1
+## Strategy 1: Bivariate
 
 ### a_0, r_0, t_0
 
@@ -290,7 +290,7 @@ a_0 %>% as_tibble(rownames = 'crop') %>%
 ```
 
 
-### Get a artifitial population for bootstrap sampling
+### Get a artificial population for bootstrap sampling
 
 ```{r}
 U_star <- gen_U_star(a_0, strategy = 'one', size = Size)
@@ -691,7 +691,7 @@ result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 
 
 
-## Strategy 2
+## Strategy 2: Remote Sensing
 
 ### a_0, r_0, t_0
 
@@ -720,7 +720,7 @@ a_0 %>% as_tibble(rownames = 'crop') %>%
 ```
 
 
-### Get a artifitial population for bootstrap sampling
+### Get a artificial population for bootstrap sampling
 
 ```{r}
 U_star <- gen_U_star(a_0, strategy = 'two', size = Size)
@@ -934,7 +934,7 @@ result_two %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 
 
 
-## Strategy 3
+## Strategy 3: Ground
 
 ### a_0, r_0, t_0
 
@@ -963,7 +963,7 @@ a_0 %>% as_tibble(rownames = 'crop') %>%
 ```
 
 
-### Get a artifitial population for bootstrap sampling
+### Get a artificial population for bootstrap sampling
 
 ```{r}
 U_star <- gen_U_star(a_0, strategy = 'three', size = Size)
