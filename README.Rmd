@@ -1,5 +1,5 @@
 ---
-title: "Bootstrap Assessment of Crop Area Estimates using Satellite
+title: "<span style='color:#28a745'>Bootstrap Assessment of Crop Area Estimates using Satellite<span>
 Pixels Counting"
 author: "André Leite, Cristiano Ferraz, Jacques Delincé & Raydonal Ospina"
 date: "</br></br>`r Sys.Date()`"

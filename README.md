@@ -1,5 +1,5 @@
-Bootstrap Assessment of Crop Area Estimates using Satellite Pixels
-Counting
+<span style='color:#28a745'>Bootstrap Assessment of Crop Area Estimates
+using Satellite<span> Pixels Counting
 ================
 André Leite, Cristiano Ferraz, Jacques Delincé & Raydonal Ospina
 </br></br>2022-04-15
