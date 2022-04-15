@@ -1315,15 +1315,12 @@ result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
   geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
   theme(legend.position="bottom") + 
   labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
-  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
   #ggtitle("Crop: Others") +
   scale_fill_brewer(palette = "Greys", direction = -1) +
   geom_vline(aes(xintercept = n/1000, linetype = References), 
              size = 1, data = Reference %>% filter(crop == 'Others')) 
 ```
-
-    ## Scale for 'fill' is already present. Adding another scale for 'fill', which
-    ## will replace the existing scale.
 
 ![](README_files/figure-gfm/unnamed-chunk-21-2.png)<!-- -->
 
@@ -3173,7 +3170,7 @@ result_three %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 Crop =  colnames(jacques_matrix)[1]
 
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
   bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
   bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
@@ -3192,7 +3189,7 @@ result_one %>%
 
 ``` r
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
   bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
   bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
@@ -3215,7 +3212,7 @@ result_one %>%
 Crop =  colnames(jacques_matrix)[2]
 
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
   bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
   bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
@@ -3559,6 +3556,801 @@ result %>%
 ```
 
 ![](README_files/figure-gfm/unnamed-chunk-52-2.png)<!-- -->
+
+## Outros Resultados
+
+``` r
+result <- result_one %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground"))
+
+
+
+result %>% filter(Strategy == "Strategy 1: Bivariate") %>%  
+  group_by(crop, estimator, Strategy) %>% 
+  summarise(Estimate = mean(n/1000),
+            `Std.Dev.` = sd(n/1000),
+            `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
+  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+            by = 'crop') %>% 
+  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Estimate = round(Estimate, 1),
+         `Std.Dev.` = round(`Std.Dev.`, 2),
+         `CV(%)` = round(`CV(%)`, 1),
+         Bias = round(Bias, 1)) %>% 
+  select(-Strategy, -R) %>% 
+  arrange(match(crop, colnames(jacques_matrix))) %>%
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Estimator = recode(Estimator, 
+                              direct = 'Direct', 
+                              inverse = 'Inverse')) %>% 
+  kable(caption = "Stategy 1 (x 1,000 hectares)", align = "lcrrrr") %>%
+kable_classic_2() %>% 
+kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+              full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, color = "black", background = 'white')
+```
+
+<table class=" lightable-classic-2 table table-striped table-hover table-condensed table-responsive" style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto; font-size: 12px; width: auto !important; margin-left: auto; margin-right: auto;">
+<caption style="font-size: initial !important;">
+Stategy 1 (x 1,000 hectares)
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;color: black !important;background-color: white !important;">
+Crop
+</th>
+<th style="text-align:center;color: black !important;background-color: white !important;">
+Estimator
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Estimate
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Std.Dev.
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+CV(%)
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Bias
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Wheat
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+243.1
+</td>
+<td style="text-align:right;">
+10.45
+</td>
+<td style="text-align:right;">
+4.3
+</td>
+<td style="text-align:right;">
+-73.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Wheat
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+225.6
+</td>
+<td style="text-align:right;">
+23.33
+</td>
+<td style="text-align:right;">
+10.3
+</td>
+<td style="text-align:right;">
+-90.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Rapeseed
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+47.7
+</td>
+<td style="text-align:right;">
+5.81
+</td>
+<td style="text-align:right;">
+12.2
+</td>
+<td style="text-align:right;">
+-47.2
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Rapeseed
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+19.9
+</td>
+<td style="text-align:right;">
+15.66
+</td>
+<td style="text-align:right;">
+78.7
+</td>
+<td style="text-align:right;">
+-75.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Corn
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+105.8
+</td>
+<td style="text-align:right;">
+7.23
+</td>
+<td style="text-align:right;">
+6.8
+</td>
+<td style="text-align:right;">
+-29.3
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Corn
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+106.4
+</td>
+<td style="text-align:right;">
+12.46
+</td>
+<td style="text-align:right;">
+11.7
+</td>
+<td style="text-align:right;">
+-28.7
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Sugarbeet
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+198.2
+</td>
+<td style="text-align:right;">
+9.54
+</td>
+<td style="text-align:right;">
+4.8
+</td>
+<td style="text-align:right;">
+37.9
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Sugarbeet
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+198.0
+</td>
+<td style="text-align:right;">
+17.76
+</td>
+<td style="text-align:right;">
+9.0
+</td>
+<td style="text-align:right;">
+37.7
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Others
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+405.3
+</td>
+<td style="text-align:right;">
+13.01
+</td>
+<td style="text-align:right;">
+3.2
+</td>
+<td style="text-align:right;">
+111.6
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Others
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+450.2
+</td>
+<td style="text-align:right;">
+28.10
+</td>
+<td style="text-align:right;">
+6.2
+</td>
+<td style="text-align:right;">
+156.5
+</td>
+</tr>
+</tbody>
+</table>
+
+``` r
+result %>% filter(Strategy == "Strategy 2: Classification by RS") %>%  
+  group_by(crop, estimator, Strategy) %>% 
+  summarise(Estimate = mean(n/1000),
+            `Std.Dev.` = sd(n/1000),
+            `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
+  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+            by = 'crop') %>% 
+  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Estimate = round(Estimate, 1),
+         `Std.Dev.` = round(`Std.Dev.`, 2),
+         `CV(%)` = round(`CV(%)`, 1),
+         Bias = round(Bias, 1)) %>% 
+  select(-Strategy, -R) %>% 
+  arrange(match(crop, colnames(jacques_matrix))) %>%
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Estimator = recode(Estimator, 
+                              direct = 'Direct', 
+                              inverse = 'Inverse')) %>% 
+  kable(caption = "Stategy 2 (x 1,000 hectares)", align = "lcrrrr") %>%
+kable_classic_2() %>% 
+kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+              full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, color = "black", background = 'white')
+```
+
+<table class=" lightable-classic-2 table table-striped table-hover table-condensed table-responsive" style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto; font-size: 12px; width: auto !important; margin-left: auto; margin-right: auto;">
+<caption style="font-size: initial !important;">
+Stategy 2 (x 1,000 hectares)
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;color: black !important;background-color: white !important;">
+Crop
+</th>
+<th style="text-align:center;color: black !important;background-color: white !important;">
+Estimator
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Estimate
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Std.Dev.
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+CV(%)
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Bias
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Wheat
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+247.5
+</td>
+<td style="text-align:right;">
+12.14
+</td>
+<td style="text-align:right;">
+4.9
+</td>
+<td style="text-align:right;">
+-68.6
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Wheat
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+322.8
+</td>
+<td style="text-align:right;">
+22.76
+</td>
+<td style="text-align:right;">
+7.1
+</td>
+<td style="text-align:right;">
+6.7
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Rapeseed
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+43.0
+</td>
+<td style="text-align:right;">
+6.02
+</td>
+<td style="text-align:right;">
+14.0
+</td>
+<td style="text-align:right;">
+-52.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Rapeseed
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+-126.4
+</td>
+<td style="text-align:right;">
+20.81
+</td>
+<td style="text-align:right;">
+-16.5
+</td>
+<td style="text-align:right;">
+-221.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Corn
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+104.6
+</td>
+<td style="text-align:right;">
+6.52
+</td>
+<td style="text-align:right;">
+6.2
+</td>
+<td style="text-align:right;">
+-30.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Corn
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+77.0
+</td>
+<td style="text-align:right;">
+10.64
+</td>
+<td style="text-align:right;">
+13.8
+</td>
+<td style="text-align:right;">
+-58.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Sugarbeet
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+210.7
+</td>
+<td style="text-align:right;">
+9.76
+</td>
+<td style="text-align:right;">
+4.6
+</td>
+<td style="text-align:right;">
+50.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Sugarbeet
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+158.9
+</td>
+<td style="text-align:right;">
+15.38
+</td>
+<td style="text-align:right;">
+9.7
+</td>
+<td style="text-align:right;">
+-1.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Others
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+394.3
+</td>
+<td style="text-align:right;">
+14.26
+</td>
+<td style="text-align:right;">
+3.6
+</td>
+<td style="text-align:right;">
+100.6
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Others
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+567.8
+</td>
+<td style="text-align:right;">
+30.22
+</td>
+<td style="text-align:right;">
+5.3
+</td>
+<td style="text-align:right;">
+274.1
+</td>
+</tr>
+</tbody>
+</table>
+
+``` r
+result %>% filter(Strategy == "Strategy 3: Classification by Ground") %>%  
+  group_by(crop, estimator, Strategy) %>% 
+  summarise(Estimate = mean(n/1000),
+            `Std.Dev.` = sd(n/1000),
+            `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
+  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+            by = 'crop') %>% 
+  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Estimate = round(Estimate, 1),
+         `Std.Dev.` = round(`Std.Dev.`, 2),
+         `CV(%)` = round(`CV(%)`, 1),
+         Bias = round(Bias, 1)) %>% 
+  select(-Strategy, -R) %>% 
+  arrange(match(crop, colnames(jacques_matrix))) %>%
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Estimator = recode(Estimator, 
+                              direct = 'Direct', 
+                              inverse = 'Inverse')) %>% 
+  kable(caption = "Stategy 3 (x 1,000 hectares)", align = "lcrrrr") %>%
+kable_classic_2() %>% 
+kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+              full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, color = "black", background = 'white')
+```
+
+<table class=" lightable-classic-2 table table-striped table-hover table-condensed table-responsive" style="font-family: &quot;Arial Narrow&quot;, &quot;Source Sans Pro&quot;, sans-serif; margin-left: auto; margin-right: auto; font-size: 12px; width: auto !important; margin-left: auto; margin-right: auto;">
+<caption style="font-size: initial !important;">
+Stategy 3 (x 1,000 hectares)
+</caption>
+<thead>
+<tr>
+<th style="text-align:left;color: black !important;background-color: white !important;">
+Crop
+</th>
+<th style="text-align:center;color: black !important;background-color: white !important;">
+Estimator
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Estimate
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Std.Dev.
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+CV(%)
+</th>
+<th style="text-align:right;color: black !important;background-color: white !important;">
+Bias
+</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Wheat
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+229.6
+</td>
+<td style="text-align:right;">
+6.99
+</td>
+<td style="text-align:right;">
+3.0
+</td>
+<td style="text-align:right;">
+-86.5
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Wheat
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+219.1
+</td>
+<td style="text-align:right;">
+28.82
+</td>
+<td style="text-align:right;">
+13.2
+</td>
+<td style="text-align:right;">
+-97.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Rapeseed
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+162.8
+</td>
+<td style="text-align:right;">
+7.34
+</td>
+<td style="text-align:right;">
+4.5
+</td>
+<td style="text-align:right;">
+67.9
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Rapeseed
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+29.0
+</td>
+<td style="text-align:right;">
+18.46
+</td>
+<td style="text-align:right;">
+63.6
+</td>
+<td style="text-align:right;">
+-65.9
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Corn
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+147.0
+</td>
+<td style="text-align:right;">
+5.22
+</td>
+<td style="text-align:right;">
+3.6
+</td>
+<td style="text-align:right;">
+12.0
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Corn
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+116.6
+</td>
+<td style="text-align:right;">
+12.77
+</td>
+<td style="text-align:right;">
+11.0
+</td>
+<td style="text-align:right;">
+-18.4
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Sugarbeet
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+202.1
+</td>
+<td style="text-align:right;">
+6.78
+</td>
+<td style="text-align:right;">
+3.4
+</td>
+<td style="text-align:right;">
+41.9
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Sugarbeet
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+203.0
+</td>
+<td style="text-align:right;">
+20.67
+</td>
+<td style="text-align:right;">
+10.2
+</td>
+<td style="text-align:right;">
+42.7
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Others
+</td>
+<td style="text-align:center;">
+Direct
+</td>
+<td style="text-align:right;">
+258.5
+</td>
+<td style="text-align:right;">
+7.11
+</td>
+<td style="text-align:right;">
+2.7
+</td>
+<td style="text-align:right;">
+-35.2
+</td>
+</tr>
+<tr>
+<td style="text-align:left;font-weight: bold;">
+Others
+</td>
+<td style="text-align:center;">
+Inverse
+</td>
+<td style="text-align:right;">
+432.3
+</td>
+<td style="text-align:right;">
+36.06
+</td>
+<td style="text-align:right;">
+8.3
+</td>
+<td style="text-align:right;">
+138.6
+</td>
+</tr>
+</tbody>
+</table>
+
+``` r
+result %>%  
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_grid(crop ~ Strategy, scales = "free") +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = .75, data = Reference) 
+```
+
+![](README_files/figure-gfm/unnamed-chunk-56-1.png)<!-- -->
 
 # Stay Tuned
 

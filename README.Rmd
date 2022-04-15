@@ -492,7 +492,7 @@ result_one %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
   geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
   theme(legend.position="bottom") + 
   labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', fill = 'Estimator') + 
-  scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
+  #scale_fill_paletteer_d(`"ggthemes::wsj_red_green"`) + 
   #ggtitle("Crop: Others") +
   scale_fill_brewer(palette = "Greys", direction = -1) +
   geom_vline(aes(xintercept = n/1000, linetype = References), 
@@ -1182,7 +1182,7 @@ result_three %>% filter(crop == 'Others', Sample == '1000') %>% ggplot() +
 Crop =  colnames(jacques_matrix)[1]
 
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
   bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
   bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
@@ -1197,7 +1197,7 @@ result_one %>%
   scale_color_paletteer_d(Palette) 
   
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
   bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
   bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
@@ -1219,7 +1219,7 @@ result_one %>%
 Crop =  colnames(jacques_matrix)[2]
 
 result_one %>% 
-  mutate(Strategy = "Strategy 1") %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
   bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
   bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground")) %>% 
   filter(crop == Crop) %>% 
@@ -1512,6 +1512,123 @@ result %>%
   geom_vline(aes(xintercept = n/1000, linetype = References), size = 1, data = Reference %>%
                filter(crop == Crop))
 ```
+
+
+## Outros Resultados
+
+
+
+
+```{r}
+
+result <- result_one %>% 
+  mutate(Strategy = "Strategy 1: Bivariate") %>% 
+  bind_rows(result_two %>% mutate(Strategy = "Strategy 2: Classification by RS")) %>% 
+  bind_rows(result_three %>% mutate(Strategy = "Strategy 3: Classification by Ground"))
+
+
+
+result %>% filter(Strategy == "Strategy 1: Bivariate") %>%  
+  group_by(crop, estimator, Strategy) %>% 
+  summarise(Estimate = mean(n/1000),
+            `Std.Dev.` = sd(n/1000),
+            `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
+  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+            by = 'crop') %>% 
+  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Estimate = round(Estimate, 1),
+         `Std.Dev.` = round(`Std.Dev.`, 2),
+         `CV(%)` = round(`CV(%)`, 1),
+         Bias = round(Bias, 1)) %>% 
+  select(-Strategy, -R) %>% 
+  arrange(match(crop, colnames(jacques_matrix))) %>%
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Estimator = recode(Estimator, 
+                              direct = 'Direct', 
+                              inverse = 'Inverse')) %>% 
+  kable(caption = "Stategy 1 (x 1,000 hectares)", align = "lcrrrr") %>%
+kable_classic_2() %>% 
+kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+              full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, color = "black", background = 'white')
+```
+
+```{r}
+result %>% filter(Strategy == "Strategy 2: Classification by RS") %>%  
+  group_by(crop, estimator, Strategy) %>% 
+  summarise(Estimate = mean(n/1000),
+            `Std.Dev.` = sd(n/1000),
+            `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
+  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+            by = 'crop') %>% 
+  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Estimate = round(Estimate, 1),
+         `Std.Dev.` = round(`Std.Dev.`, 2),
+         `CV(%)` = round(`CV(%)`, 1),
+         Bias = round(Bias, 1)) %>% 
+  select(-Strategy, -R) %>% 
+  arrange(match(crop, colnames(jacques_matrix))) %>%
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Estimator = recode(Estimator, 
+                              direct = 'Direct', 
+                              inverse = 'Inverse')) %>% 
+  kable(caption = "Stategy 2 (x 1,000 hectares)", align = "lcrrrr") %>%
+kable_classic_2() %>% 
+kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+              full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, color = "black", background = 'white')
+
+```
+
+```{r}
+result %>% filter(Strategy == "Strategy 3: Classification by Ground") %>%  
+  group_by(crop, estimator, Strategy) %>% 
+  summarise(Estimate = mean(n/1000),
+            `Std.Dev.` = sd(n/1000),
+            `CV(%)` = (`Std.Dev.`/Estimate)*100, .groups = 'drop') %>% 
+  left_join(R_U_0 %>% as_tibble(rownames = "crop") %>% rename(R = n),
+            by = 'crop') %>% 
+  mutate(Bias = Estimate - R/1000) %>% 
+  mutate(Estimate = round(Estimate, 1),
+         `Std.Dev.` = round(`Std.Dev.`, 2),
+         `CV(%)` = round(`CV(%)`, 1),
+         Bias = round(Bias, 1)) %>% 
+  select(-Strategy, -R) %>% 
+  arrange(match(crop, colnames(jacques_matrix))) %>%
+  rename(Crop = crop, Estimator = estimator) %>% 
+  mutate(Estimator = recode(Estimator, 
+                              direct = 'Direct', 
+                              inverse = 'Inverse')) %>% 
+  kable(caption = "Stategy 3 (x 1,000 hectares)", align = "lcrrrr") %>%
+kable_classic_2() %>% 
+kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"),
+              full_width = FALSE, font_size = 12) %>% 
+  column_spec(1, bold = TRUE) %>% 
+  row_spec(0, color = "black", background = 'white')
+
+```
+
+
+```{r fig.width=8}
+result %>%  
+  mutate(crop = factor(crop, levels = colnames(jacques_matrix), ordered = TRUE)) %>% 
+  ggplot() +
+  theme_bw() +
+  geom_density(aes(x = n/1000, fill = estimator), alpha = .75, position = 'identity') + 
+  facet_grid(crop ~ Strategy, scales = "free") +
+  theme(legend.position="bottom") + labs(x = 'Estimates (x 1000 pixels)', y  = 'Density', 
+                                         fill = 'Estimator') +
+  scale_fill_brewer(palette = "Greys", direction = -1) +
+  geom_vline(aes(xintercept = n/1000, linetype = References), size = .75, data = Reference) 
+
+```
+
+
+
+
+
 
 # Stay Tuned
 
